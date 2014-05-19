@@ -1,0 +1,17 @@
+- name: pull code down from repo
+  git: repo={{ item.value.repo }}
+       dest={{ install_dir }}/dockerfiles/{{ item.value.image }}/app
+       version=master
+       depth=1
+       force=yes
+       update=yes
+       accept_hostkey=yes
+
+  with_dict: containers
+  when: item.value.repo is defined
+  register: git_results
+
+- name: copy over local files
+  synchronize: src={{ item.value.local_files }} dest={{ install_dir }}/dockerfiles/{{ item.value..image }}/app/ recursive=yes
+  with_dict: containers
+  when: item.value.local_files is defined

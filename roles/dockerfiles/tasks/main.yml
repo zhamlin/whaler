@@ -1,0 +1,9 @@
+- name: make container dir @ {{ install_dir }}
+  file: path={{ install_dir }}/dockerfiles state=directory recurse=true
+
+- name: copy over dockerfiles
+  synchronize: src=../../dockerfiles/{{ item.value.image }} dest={{ install_dir }}/dockerfiles recursive=yes
+  with_dict: containers
+  register: dockerfiles_result
+
+# - debug: var=dockerfiles_result

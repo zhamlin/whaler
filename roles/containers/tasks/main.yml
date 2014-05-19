@@ -1,0 +1,29 @@
+- name: build containers
+  command: chdir={{ install_dir }}/dockerfiles/{{ item.item.value.image }} docker build -t={{ item.item.value.image }} --rm .
+  with_items: dockerfiles_result.results
+  when: item.changed or (item.item.key == "esbsif" and git_results|changed)
+  register: build_results
+
+- name: stop all required containers
+  command: docker stop {{ item.key }}
+  with_dict: containers
+  ignore_errors: yes
+
+- name: remove all required containers
+  command: docker rm {{ item.key }}
+  with_dict: containers
+  ignore_errors: yes
+
+- name: run all required containers
+  command: docker run --name {{ item.key }} {{ item.value.command | join(" ") }}
+  with_dict: containers
+  when: not item.value.main
+
+- name: run main container
+  command: docker run --name {{ item.key }} {{ item.value.command | join(" ") }}
+  with_dict: containers
+  when: item.value.main
+
+- name: cleanup images
+  shell: docker images --no-trunc | grep none | awk '{print $3}' | xargs -r docker rmi
+  when: build_results|changed
