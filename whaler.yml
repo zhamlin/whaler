@@ -1,0 +1,11 @@
+- hosts: '{{ hosts }}'
+  sudo: true
+  gather_facts: false
+  vars_files:
+    - apps/{{ app }}/common.yml
+    - "apps/{{ app }}/{{ env }}.yml"
+  roles:
+    - dockerfiles
+    - git
+    - local_files
+    - containers

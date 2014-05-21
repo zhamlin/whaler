@@ -1,0 +1,17 @@
+- name: pull code down from repo
+  git: repo={{ item.value.git.repo }}
+       dest={{ install_dir }}/dockerfiles/{{ item.value.image }}/{{ item.value.git.dest }}
+       version=master
+       depth=1
+       force=yes
+       update=yes
+       accept_hostkey=yes
+
+  with_dict: containers
+  when: item.value.git is defined
+  register: git_results
+
+- name: set build
+  set_fact:
+    containers_build: True
+  when: git_results|changed

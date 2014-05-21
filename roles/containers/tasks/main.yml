@@ -1,7 +1,7 @@
 - name: build containers
   command: chdir={{ install_dir }}/dockerfiles/{{ item.item.value.image }} docker build -t={{ item.item.value.image }} --rm .
   with_items: dockerfiles_result.results
-  when: item.changed or (item.item.key == "esbsif" and git_results|changed)
+  when: item.changed or ({{ containers_build | default(False) }}== True)
   register: build_results
 
 - name: stop all required containers

@@ -3,14 +3,13 @@
 import argparse
 import os
 
-command = 'ansible-playbook {0} -i hosts --extra-vars "hosts={2} env={1}"'
+command = 'ansible-playbook whaler.yml -i hosts --extra-vars "hosts={2} env={1} app={0}"'
 
 def deploy(args):
     if not args.playbook:
         print "mastful: error: argument playbook is required"
         exit(1)
-    playbook = "apps/" + args.playbook + "/main.yml"
-    return command.format(playbook, args.e, args.hosts)
+    return command.format(args.playbook, args.e, args.hosts)
 
 def install(args):
     return command.format("docker.yml", args.e, args.hosts)
@@ -21,6 +20,7 @@ parser.add_argument("playbook", nargs="?",  help="which playbook to run")
 parser.add_argument("-e", help="environment for app", required=False, default="dev")
 parser.add_argument("-hosts", help="host to deploy app on", required=True)
 parser.add_argument("-d", help="debug", required=False, action="store_true", default=False)
+parser.add_argument("-a", help="debug", required=False, action="store_true", default=False)
 
 args = parser.parse_args()
 if args.action not in ["install", "deploy"]:
@@ -32,6 +32,5 @@ if args.d:
     command = command + " -vvvv"
 os.system(command)
 
-# TODO: Handle this a better way, maybe another flag
-if args.e == "dev":
-    os.system("sudo docker attach " + args.playbook)
+if args.a:
+    os.system("docker attach " + args.playbook)
