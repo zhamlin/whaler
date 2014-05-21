@@ -3,16 +3,16 @@
 import argparse
 import os
 
-command = 'ansible-playbook whaler.yml -i hosts --extra-vars "hosts={2} env={1} app={0}"'
+command = 'ansible-playbook {0} -i hosts --extra-vars "hosts={2} env={1} app={3}"'
 
 def deploy(args):
     if not args.playbook:
         print "mastful: error: argument playbook is required"
         exit(1)
-    return command.format(args.playbook, args.e, args.hosts)
+    return command.format("whaler.yml", args.e, args.hosts, args.playbook)
 
 def install(args):
-    return command.format("docker.yml", args.e, args.hosts)
+    return command.format("docker.yml", args.e, args.hosts, "")
 
 parser = argparse.ArgumentParser(description="App to manage docker containers")
 parser.add_argument("action", help="what to do")
