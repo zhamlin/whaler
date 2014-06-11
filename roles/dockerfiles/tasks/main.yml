@@ -1,9 +1,12 @@
 - name: make container dir @ {{ install_dir }}
-  file: path={{ install_dir }}/dockerfiles state=directory recurse=true
+  file: path={{ install_dir }}/{{ item }} state=directory recurse=true
+  with_items: folders
 
-- name: copy over dockerfiles
-  synchronize: src=~/docker_sauce/dockerfiles/{{ item.value.image }} dest={{ install_dir }}/dockerfiles recursive=yes
-  with_dict: containers
-  register: dockerfiles_result
+- debug: var=main_container
 
-# - debug: var=dockerfiles_result
+- name: copy over apps dockerfile
+  synchronize: src="{{ app }}/" dest="{{ install_dir }}/apps/{{ main_container.name }}/" recursive=yes
+
+- name: copy over services
+  synchronize: src="/home/shaggy/docker_sauce/images/{{ item }}" dest="{{ install_dir }}/images" recursive=yes
+  with_items: build

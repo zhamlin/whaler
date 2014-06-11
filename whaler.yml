@@ -2,10 +2,9 @@
   sudo: true
   gather_facts: false
   vars_files:
-    - apps/{{ app }}/common.yml
-    - "apps/{{ app }}/{{ env }}.yml"
+    - "{{ app }}/common.yml"
   roles:
     - dockerfiles
-    - git
-    - local_files
+    # - git
+    # - local_files
     - containers

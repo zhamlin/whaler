@@ -1,36 +1,138 @@
 #!/usr/bin/env python
 
 import argparse
+import yaml
+import json
 import os
 
-command = 'ansible-playbook {0} -i hosts --extra-vars "hosts={2} env={1} app={3}"'
+from collections import OrderedDict
+
+install_dir = "~/docker_sauce"
+install_dir = os.path.expanduser(install_dir)
+
+defaults = {
+    "daemon": True,
+}
+
+order = OrderedDict([
+    ("name", "--name {0}"),
+    ("interactive", "-it"),
+    ("daemon", "-d"),
+    ("volumes", "-v {0}"),
+    ("env", '-e "{0}={1}"'),
+    ("expose", "--expose={0}"),
+    ("ports", "-p={0}:{1}"),
+    ("links", "--link={0}:{1}"),
+    ("image", "{0}"),
+    ("command", "{0}")
+])
+
+# TODO: Make this cleaner
+def generate_command(yaml):
+    command = ["docker run"]
+    for key, val in defaults.iteritems():
+        if key not in yaml:
+            yaml[key] = val
+
+    for item, val in order.iteritems():
+        if item not in yaml:
+            continue
+
+        typ = type(yaml[item])
+        item = yaml[item]
+        if typ is list:
+            for obj in item:
+                command.append(val.format(obj))
+        elif typ is dict:
+            for key, value in item.iteritems():
+                command.append(val.format(key, value))
+        elif typ is str:
+            command.append(val.format(item))
+        elif typ is bool and item:
+            command.append(val)
+
+    return " ".join(command)
+
+def get_vars(args):
+    stream = file(os.path.join(args.directory, args.environment + ".yml"), "r")
+
+    info = yaml.load(stream)
+    main_container = {
+        "command": generate_command(info),
+        "image": info["image"],
+        "name": info["name"]
+    }
+    containers = [ info["name"] ]
+    services = {}
+    build = [ info["base_image"] ]
+
+    for service, yml in info["services"].iteritems():
+        build.append(service)
+        containers.append(yml["name"])
+        services[service] = {
+            "command": generate_command(yml)
+        }
+
+    ansible_vars = {
+        "main_container": main_container,
+        "services": services,
+        "environment": args.environment,
+        "app": args.directory,
+        "hosts": args.hosts,
+        "build": build,
+        "containers": containers
+    }
+    return json.dumps(ansible_vars)
 
 def deploy(args):
-    if not args.playbook:
-        print "mastful: error: argument playbook is required"
+    command = 'ansible-playbook {0} -i {1} --extra-vars \'{2}\''
+    deploy_playbook = os.path.join(install_dir, "whaler.yml")
+    hosts_file = os.path.join(install_dir, "hosts")
+
+    whaler_dir = args.directory
+    if not os.path.exists(whaler_dir):
+        print "must init whaler first"
         exit(1)
-    return command.format("whaler.yml", args.e, args.hosts, args.playbook)
+
+    new_command = command.format(deploy_playbook, hosts_file, args.vars)
+
+    if args.debug:
+        new_command += " -vvvv"
+    return new_command
 
 def install(args):
     return command.format("docker.yml", args.e, args.hosts, "")
 
+def initialize(args):
+    files = ["common.yml", "production.yml", "development.yml", "Dockerfile"]
+    if not os.path.exists(whaler_dir):
+        os.makedirs(whaler_dir)
+        for f in files:
+            open(os.path.join(whaler_dir, f), "a").close()
+
+    return False
+
 parser = argparse.ArgumentParser(description="App to manage docker containers")
-parser.add_argument("action", help="what to do")
-parser.add_argument("playbook", nargs="?",  help="which playbook to run")
-parser.add_argument("-e", help="environment for app", required=False, default="dev")
-parser.add_argument("-hosts", help="host to deploy app on", required=True)
-parser.add_argument("-d", help="debug", required=False, action="store_true", default=False)
-parser.add_argument("-a", help="debug", required=False, action="store_true", default=False)
+subparsers = parser.add_subparsers(help="commands")
+
+init_parser = subparsers.add_parser("init", help="Initialize whaler dir")
+init_parser.set_defaults(func=initialize)
+
+deploy_parser = subparsers.add_parser("deploy", help="Deploy containers")
+deploy_parser.add_argument("-e", "--environment", help="environment for app", required=False, default="development")
+deploy_parser.add_argument("-d", "--debug", help="debug", required=False, action="store_true", default=False)
+deploy_parser.add_argument("--hosts", help="host to deploy app on", required=True)
+deploy_parser.add_argument("-w", "--directory", help="Directory for whaler files", required=False, default=os.path.join(os.getcwd(), ".whaler"))
+deploy_parser.set_defaults(func=deploy)
 
 args = parser.parse_args()
-if args.action not in ["install", "deploy"]:
-    print "Sepcify either 'install' or 'deploy'"
-    exit(0)
+args.vars = get_vars(args)
+command = args.func(args)
 
-command = locals()[args.action](args)
-if args.d:
-    command = command + " -vvvv"
-os.system(command)
+print command
+if command:
+    os.chdir(install_dir)
+    os.system(command)
 
-if args.a:
-    os.system("docker attach " + args.playbook)
+# if args.a:
+#     os.system("docker attach " + args.playbook)
