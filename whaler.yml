@@ -1,10 +1,12 @@
 - hosts: '{{ hosts }}'
   sudo: true
   gather_facts: false
+  vars:
+      install_dir: "/etc/whaler"
   vars_files:
     - "{{ app }}/common.yml"
   roles:
     - dockerfiles
-    # - git
-    # - local_files
+    - git
+    - local_files
     - containers
