@@ -3,12 +3,24 @@
 import argparse
 import yaml
 import json
+import sys
 import os
 
 from collections import OrderedDict
 
-install_dir = "~/docker_sauce"
+install_dir = os.environ.get("WHALER")
+if not install_dir:
+    print "WHALER env must be set"
+    sys.exit(1)
+
 install_dir = os.path.expanduser(install_dir)
+
+command_generator = {
+    bool: ( lambda command, string, val: command.append(string) ),
+    str: ( lambda command, string, val: command.append(string.format(val)) ),
+    dict: ( lambda command, string, val: command + [string.format(key, value) for key, value in val.iteritems()]),
+    list: ( lambda command, string, val: command + [string.format(obj) for obj in val] )
+}
 
 defaults = {
     "daemon": True,
@@ -27,29 +39,20 @@ order = OrderedDict([
     ("command", "{0}")
 ])
 
-# TODO: Make this cleaner
 def generate_command(yaml):
     command = ["docker run"]
+
     for key, val in defaults.iteritems():
         if key not in yaml:
             yaml[key] = val
 
-    for item, val in order.iteritems():
-        if item not in yaml:
+    for name, string in order.iteritems():
+        if name not in yaml:
             continue
 
-        typ = type(yaml[item])
-        item = yaml[item]
-        if typ is list:
-            for obj in item:
-                command.append(val.format(obj))
-        elif typ is dict:
-            for key, value in item.iteritems():
-                command.append(val.format(key, value))
-        elif typ is str:
-            command.append(val.format(item))
-        elif typ is bool and item:
-            command.append(val)
+        typ = type(yaml[name])
+        value = yaml[name]
+        command_generator[typ](command, string, value)
 
     return " ".join(command)
 
@@ -64,27 +67,39 @@ def get_vars(args):
     }
     containers = [ info["name"] ]
     services = {}
-    build = [ info["base_image"] ]
+    build = []
 
-    for service, yml in info["services"].iteritems():
-        build.append(service)
-        containers.append(yml["name"])
-        services[service] = {
-            "command": generate_command(yml)
-        }
+    if "base_image" in info:
+        build.append(info["base_image"])
+
+    if "services" in info:
+        for service, yml in info["services"].iteritems():
+            build.append(service)
+            containers.append(yml["name"])
+            services[service] = {
+                "command": generate_command(yml)
+            }
 
     ansible_vars = {
         "main_container": main_container,
-        "services": services,
         "environment": args.environment,
         "app": args.directory,
         "hosts": args.hosts,
+        "services": services,
+        "containers": containers,
         "build": build,
-        "containers": containers
+        "working_dir": os.getcwd()
     }
-    return json.dumps(ansible_vars)
+
+    plugins = [ "git", "local_files" ]
+    for plugin in plugins:
+        if plugin in info:
+            ansible_vars[plugin] = info[plugin]
+
+    return ansible_vars
 
 def deploy(args):
+    args.vars = get_vars(args)
     command = 'ansible-playbook {0} -i {1} --extra-vars \'{2}\''
     deploy_playbook = os.path.join(install_dir, "whaler.yml")
     hosts_file = os.path.join(install_dir, "hosts")
@@ -94,21 +109,20 @@ def deploy(args):
         print "must init whaler first"
         exit(1)
 
-    new_command = command.format(deploy_playbook, hosts_file, args.vars)
+    new_command = command.format(deploy_playbook, hosts_file, json.dumps(args.vars))
 
     if args.debug:
         new_command += " -vvvv"
+    if args.attach:
+        new_command += " && docker attach " + args.vars["main_container"]["name"]
     return new_command
-
-def install(args):
-    return command.format("docker.yml", args.e, args.hosts, "")
 
 def initialize(args):
     files = ["common.yml", "production.yml", "development.yml", "Dockerfile"]
-    if not os.path.exists(whaler_dir):
-        os.makedirs(whaler_dir)
+    if not os.path.exists(args.directory):
+        os.makedirs(args.directory)
         for f in files:
-            open(os.path.join(whaler_dir, f), "a").close()
+            open(os.path.join(args.directory, f), "a").close()
 
     return False
 
@@ -116,23 +130,20 @@ parser = argparse.ArgumentParser(description="App to manage docker containers")
 subparsers = parser.add_subparsers(help="commands")
 
 init_parser = subparsers.add_parser("init", help="Initialize whaler dir")
+init_parser.add_argument("-w", "--directory", help="Directory for whaler files", required=False, default=os.path.join(os.getcwd(), ".whaler"))
 init_parser.set_defaults(func=initialize)
 
-deploy_parser = subparsers.add_parser("deploy", help="Deploy containers")
+deploy_parser = subparsers.add_parser("deploy", help="deploy containers")
 deploy_parser.add_argument("-e", "--environment", help="environment for app", required=False, default="development")
 deploy_parser.add_argument("-d", "--debug", help="debug", required=False, action="store_true", default=False)
 deploy_parser.add_argument("--hosts", help="host to deploy app on", required=True)
-deploy_parser.add_argument("-w", "--directory", help="Directory for whaler files", required=False, default=os.path.join(os.getcwd(), ".whaler"))
+deploy_parser.add_argument("-w", "--directory", help="directory for whaler files", required=False, default=os.path.join(os.getcwd(), ".whaler"))
+deploy_parser.add_argument("-a", "--attach", help="attach to docker container on local machine", action="store_true", required=False)
 deploy_parser.set_defaults(func=deploy)
 
 args = parser.parse_args()
-args.vars = get_vars(args)
 command = args.func(args)
 
-print command
 if command:
     os.chdir(install_dir)
     os.system(command)
-
-# if args.a:
-#     os.system("docker attach " + args.playbook)

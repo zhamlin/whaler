@@ -2,11 +2,9 @@
   file: path={{ install_dir }}/{{ item }} state=directory recurse=true
   with_items: folders
 
-- debug: var=main_container
-
 - name: copy over apps dockerfile
   synchronize: src="{{ app }}/" dest="{{ install_dir }}/apps/{{ main_container.name }}/" recursive=yes
 
 - name: copy over services
-  synchronize: src="/home/shaggy/docker_sauce/images/{{ item }}" dest="{{ install_dir }}/images" recursive=yes
+  synchronize: src="{{ lookup('env', 'WHALER') }}/images/{{ item }}" dest="{{ install_dir }}/images" recursive=yes
   with_items: build
