@@ -1,13 +1,5 @@
 - name: copy over local files
   synchronize:
-        src={{ item.value.local_files.dir | expanduser }}
-        dest={{ install_dir }}/dockerfiles/{{ item.value.image }}/{{ item.value.local_files.dest }} recursive=yes
-  with_dict: containers
-  register: local_files
-  when: item.value.local_files is defined
-
-
-- name: set build
-  set_fact:
-    containers_build: True
-  when: local_files|changed
+        src={{ local_files.dir | expanduser }}
+        dest={{ install_dir }}/apps/{{ main_container.name }}/{{ local_files.dest }} recursive=yes
+  when: local_files is defined
