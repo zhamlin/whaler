@@ -24,6 +24,7 @@ command_generator = {
 
 defaults = {
     "daemon": True,
+    "tag": "latest"
 }
 
 order = OrderedDict([
@@ -42,10 +43,6 @@ order = OrderedDict([
 def generate_command(yaml):
     command = ["docker run"]
 
-    for key, val in defaults.iteritems():
-        if key not in yaml:
-            yaml[key] = val
-
     for name, string in order.iteritems():
         if name not in yaml:
             continue
@@ -56,15 +53,21 @@ def generate_command(yaml):
 
     return " ".join(command)
 
+def get_info(container):
+    for key, val in defaults.iteritems():
+        if key not in container:
+            container[key] = val
+
+    container["image"] = container["image"] + ":" + container["tag"]
+    container["command"] = generate_command(container)
+    return container
+
 def get_vars(args):
     stream = file(os.path.join(args.directory, args.environment + ".yml"), "r")
 
     info = yaml.load(stream)
-    main_container = {
-        "command": generate_command(info),
-        "image": info["image"],
-        "name": info["name"]
-    }
+    main_container = get_info(info)
+
     containers = [ info["name"] ]
     services = {}
     build = []
@@ -74,11 +77,12 @@ def get_vars(args):
 
     if "services" in info:
         for service, yml in info["services"].iteritems():
+            yml["image"] = service
+            service_info = get_info(yml)
+
             build.append(service)
-            containers.append(yml["name"])
-            services[service] = {
-                "command": generate_command(yml)
-            }
+            containers.append(service_info["name"])
+            services[service] = service_info
 
     ansible_vars = {
         "main_container": main_container,
