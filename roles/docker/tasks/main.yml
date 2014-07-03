@@ -1,7 +1,0 @@
-- name: install docker
-  apt: name=docker.io state=installed
-  register: docker
-
-- name: install docker some more
-  command: ln -sf /usr/bin/docker.io /usr/local/bin/docker
-  when: docker.changed

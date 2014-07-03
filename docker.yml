@@ -1,5 +1,0 @@
-- hosts: '{{ hosts }}'
-  sudo: true
-  roles:
-      # - { role: angstwad.docker_ubuntu }
-      - { role: docker }
