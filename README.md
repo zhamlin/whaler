@@ -1,4 +1,0 @@
-whaler
-======
-
-Docker done right
