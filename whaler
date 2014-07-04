@@ -62,25 +62,32 @@ def get_info(container):
     container["command"] = generate_command(container)
     return container
 
+def generate_build_command(name, no_cache):
+    build_str = "docker build -t={0} --rm=true {1}."
+    return build_str.format(name, ("--no-cache " if no_cache else ""))
+
 def get_vars(args):
     stream = file(os.path.join(args.directory, args.environment + ".yml"), "r")
 
     info = yaml.load(stream)
     main_container = get_info(info)
 
-    containers = [ info["name"] ]
+    containers = [ main_container["name"] ]
     services = {}
     build = []
 
-    if "base_image" in info:
-        build.append(info["base_image"])
+    if "base_image" in main_container:
+        command = generate_build_command(main_container["base_image"], args.no_cache)
+        build.append(command)
 
     if "services" in info:
         for service, yml in info["services"].iteritems():
             yml["image"] = service
             service_info = get_info(yml)
 
-            build.append(service)
+            command = generate_build_command(service, args.no_cache)
+            build.append(command)
+
             containers.append(service_info["name"])
             services[service] = service_info
 
@@ -143,9 +150,10 @@ deploy_parser.add_argument("-d", "--debug", help="debug", required=False, action
 deploy_parser.add_argument("--hosts", help="host to deploy app on", required=True)
 deploy_parser.add_argument("-w", "--directory", help="directory for whaler files (default to .whaler)", required=False, default=os.path.join(os.getcwd(), ".whaler"))
 deploy_parser.add_argument("-a", "--attach", help="attach to docker container (for local containers)", action="store_true", required=False)
+deploy_parser.add_argument("--no-cache", help="no cache when building containers", action="store_true", required=False)
 deploy_parser.set_defaults(func=deploy)
 
-# TODO: Add --no-cache for building
+# TODO: Support main app from registry
 
 args = parser.parse_args()
 command = args.func(args)
