@@ -1,6 +1,6 @@
 - name: build containers
-  command: chdir={{ install_dir }}/images/{{ item }} docker build -t={{ item }} --rm=true .
-  with_items: build
+  command: chdir={{ install_dir }}/images/{{ item.key }} {{ item.value }}
+  with_dict: build
   when: build is defined
 
 - name: build app

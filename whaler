@@ -74,11 +74,13 @@ def get_vars(args):
 
     containers = [ main_container["name"] ]
     services = {}
-    build = []
+    build = {}
 
     if "base_image" in main_container:
-        command = generate_build_command(main_container["base_image"], args.no_cache)
-        build.append(command)
+        img = main_container["base_image"]
+
+        command = generate_build_command(img, args.no_cache)
+        build[img] = command
 
     if "services" in info:
         for service, yml in info["services"].iteritems():
@@ -86,7 +88,7 @@ def get_vars(args):
             service_info = get_info(yml)
 
             command = generate_build_command(service, args.no_cache)
-            build.append(command)
+            build[service] = command
 
             containers.append(service_info["name"])
             services[service] = service_info

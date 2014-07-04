@@ -5,6 +5,7 @@
 - name: copy over apps dockerfile
   synchronize: src="{{ app }}/" dest="{{ install_dir }}/apps/{{ main_container.name }}/" recursive=yes
 
-- name: copy over services
-  synchronize: src="{{ lookup('env', 'WHALER') }}/images/{{ item }}" dest="{{ install_dir }}/images" recursive=yes
-  with_items: build
+- name: copy over local images
+  synchronize: src="{{ lookup('env', 'WHALER') }}/images/{{ item.key }}" dest="{{ install_dir }}/images" recursive=yes
+  with_dict: build
+  when: build is defined
