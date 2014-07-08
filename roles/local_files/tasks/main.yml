@@ -1,5 +1,4 @@
 - name: copy over local files
   synchronize:
-        src={{ local_files.dir | expanduser }}
-        dest={{ install_dir }}/apps/{{ main_container.name }}/{{ local_files.dest }} recursive=yes
-  when: local_files is defined
+        src={{ dir | expanduser }}
+        dest={{ install_dir }}/apps/{{ main_container.name }}/{{ dest }} recursive=yes
