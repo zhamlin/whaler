@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 
-import argparse
-import yaml
-import json
 import sys
 import os
+import argparse
 
+import yaml
+import json
+
+from string import Template
 from collections import OrderedDict
 
 install_dir = os.environ.get("WHALER")
@@ -39,6 +41,31 @@ order = OrderedDict([
     ("image", "{0}"),
     ("command", "{0}")
 ])
+
+# Generate ansible.cfg, allows for options to be changed at runtime
+def generate_ansible_config(args):
+    config = {
+        "defaults": {
+            "transport": "ssh",
+            "roles_path": os.path.join(install_dir, "roles")
+        }
+    }
+
+    ssh_args = []
+    if args.ssh_agent:
+        ssh_args.append("-o ForwardAgent=yes")
+
+    config["ssh_connection"] = {}
+    config["ssh_connection"]["ssh_args"] = " ".join(ssh_args)
+
+    content = ""
+    for key, values in config.iteritems():
+        content += "[" + key + "]\n"
+        for k, v in values.iteritems():
+            content +=  k + " = " + v + "\n"
+
+    with open(os.path.join(args.directory, "ansible.cfg"), "w") as f:
+        f.write(content)
 
 def generate_command(yaml):
     command = ["docker run"]
@@ -93,7 +120,13 @@ def get_vars(args):
             containers.append(service_info["name"])
             services[service] = service_info
 
-    ansible_vars = {
+    roles = [ { "role": "dockerfiles" } ]
+    for plugin, val in info["plugins"].iteritems():
+        val["role"] = plugin
+        roles.append(val)
+    roles.append({ "role": "containers" })
+
+    return {
         "main_container": main_container,
         "environment": args.environment,
         "app": args.directory,
@@ -101,26 +134,33 @@ def get_vars(args):
         "services": services,
         "containers": containers,
         "build": build,
+        "roles": roles,
         "working_dir": os.getcwd()
     }
 
-    plugins = [ "git", "local_files" ]
-    for plugin in plugins:
-        if plugin in info:
-            ansible_vars[plugin] = info[plugin]
-
-    return ansible_vars
-
 def deploy(args):
-    args.vars = get_vars(args)
-    command = 'ansible-playbook {0} -i {1} --extra-vars \'{2}\''
-    deploy_playbook = os.path.join(install_dir, "whaler.yml")
-    hosts_file = os.path.join(install_dir, "hosts")
-
-    whaler_dir = args.directory
-    if not os.path.exists(whaler_dir):
+    if not os.path.exists(args.directory):
         print "must init whaler first"
-        exit(1)
+        sys.exit(1)
+
+    generate_ansible_config(args)
+    args.vars = get_vars(args)
+
+    template = {
+        "file": os.path.join(install_dir, "whaler.yml"),
+        "vars": { "roles": yaml.dump(args.vars["roles"], default_flow_style=True) },
+        "dest": "whaler.yml"
+    }
+
+    # Copy over whaler.yml with roles set
+    with open(template["file"], "r") as f:
+        src = Template(f.read()).substitute(template["vars"])
+        with open(os.path.join(args.directory, template["dest"]), "w") as file:
+            file.write(src)
+
+    command = 'ansible-playbook {0} -i {1} --extra-vars \'{2}\''
+    deploy_playbook = os.path.join(args.directory, "whaler.yml")
+    hosts_file = os.path.join(install_dir, "hosts")
 
     new_command = command.format(deploy_playbook, hosts_file, json.dumps(args.vars))
 
@@ -132,10 +172,12 @@ def deploy(args):
 
 def initialize(args):
     files = ["common.yml", "production.yml", "development.yml", "Dockerfile"]
+
     if not os.path.exists(args.directory):
         os.makedirs(args.directory)
-        for f in files:
-            open(os.path.join(args.directory, f), "a").close()
+
+    for f in files:
+        open(os.path.join(args.directory, f), "a").close()
 
     return False
 
@@ -153,6 +195,7 @@ deploy_parser.add_argument("--hosts", help="host to deploy app on", required=Tru
 deploy_parser.add_argument("-w", "--directory", help="directory for whaler files (default to .whaler)", required=False, default=os.path.join(os.getcwd(), ".whaler"))
 deploy_parser.add_argument("-a", "--attach", help="attach to docker container (for local containers)", action="store_true", required=False)
 deploy_parser.add_argument("--no-cache", help="no cache when building containers", action="store_true", required=False)
+deploy_parser.add_argument("--ssh-agent", help="forward ssh-agent to host", action="store_true", required=False)
 deploy_parser.set_defaults(func=deploy)
 
 # TODO: Support main app from registry
@@ -161,5 +204,5 @@ args = parser.parse_args()
 command = args.func(args)
 
 if command:
-    os.chdir(install_dir)
+    os.chdir(args.directory)
     os.system(command)
