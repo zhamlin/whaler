@@ -1,15 +1,8 @@
 - name: pull code down from repo
-  git: repo={{ git.repo }}
-       dest={{ install_dir }}/apps/{{ main_container.name }}/{{ git.dest }}
+  git: repo={{ repo }}
+       dest={{ install_dir }}/apps/{{ main_container.name }}/{{ dest }}
        version=master
        depth=1
        force=yes
        update=yes
        accept_hostkey=yes
-
-  when: git is defined
-
-# - name: set build
-#   set_fact:
-#     containers_build: True
-#   when: git_results|changed
