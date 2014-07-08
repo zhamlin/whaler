@@ -5,8 +5,4 @@
       install_dir: "/etc/whaler"
   vars_files:
     - "{{ app }}/common.yml"
-  roles:
-    - dockerfiles
-    - git
-    - local_files
-    - containers
+  roles: $roles
